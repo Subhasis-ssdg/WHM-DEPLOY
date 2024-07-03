@@ -1,0 +1,102 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'REMOTE_USER', defaultValue: '', description: 'Remote Username')
+        string(name: 'REMOTE_IP', defaultValue: '', description: 'Remote IP Address')
+        string(name: 'REMOTE_HOST', defaultValue: '', description: 'Remote Hostname')
+    }
+
+    stages {
+        stage ('initial-setup') {
+            steps {
+               echo "Initialization"
+                script {
+                sshagent(["${params.REMOTE_USER}"]) {
+                    sh "sudo mkdir -p /var/lib/jenkins/workspace/${params.REMOTE_HOST}/ && ssh -o StrictHostKeyChecking=no ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo su - root && sudo hostnamectl set-hostname ${params.REMOTE_HOST} && sudo yum install net-tools -y && sudo yum install unzip -y'"
+                }
+              }
+           }
+        }
+        stage ('precheck-process') {
+           steps {
+              echo "Recheck"
+               script {
+               sshagent(["${params.REMOTE_USER}"]) {
+               sh "sudo git clone https://github.com/Subhasis-ssdg/WHM-AUTOMATION.git /var/lib/jenkins/workspace/${params.REMOTE_HOST}/ && sudo scp /var/lib/jenkins/workspace/${params.REMOTE_HOST}/whm.zip ${params.REMOTE_USER}@${params.REMOTE_IP}:/tmp/ && ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo su - root && sudo unzip /tmp/whm.zip && sudo chmod +x /tmp/whm/*.sh && sudo /usr/bin/bash /tmp/whm/precheck.sh"
+               }
+             }
+           }
+        }
+        stage ('Deployment') {
+            steps {
+                echo "WHM Installation"
+                script {
+                sshagent(["${params.REMOTE_USER}"]) {
+                    sh "ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo /usr/bin/bash /tmp/whm/whm.sh & '"
+                }
+              }
+           }
+        }
+        stage ('Tweak') {
+            steps {
+                echo "Update-Tweaks"
+                script {
+                sshagent(["${params.REMOTE_USER}"]) {
+                    sh "ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo /usr/bin/bash /tmp/whm/tweak.sh'"
+                   }
+                }
+             }
+         }
+         stage ('easyapache-compile') {
+            steps {
+                echo "easyapache recompile"
+                script {
+                sshagent(["${params.REMOTE_USER}"]) {
+                    sh "ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo /usr/bin/bash /tmp/whm/easyapache.sh & '"
+                  }
+               }
+            }
+         }
+         stage ('services build') {
+            steps {
+                echo "services Installation"
+                script {
+                sshagent(["${params.REMOTE_USER}"]) {
+                    sh "ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo /usr/bin/bash /tmp/whm/services.sh & '"
+                  }
+                }
+             }
+         }
+          stage ('Plugin Integration') {
+            steps {
+                echo "Plugin Integration"
+                script {
+                sshagent(["${params.REMOTE_USER}"]) {
+                    sh "ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo /usr/bin/bash /tmp/whm/plugin.sh'"
+                  }
+                }
+             }
+         }
+          stage ('Backup Creation') {
+            steps {
+                echo "Plugin configuration"
+                script {
+                sshagent(["${params.REMOTE_USER}"]) {
+                    sh "ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo /usr/bin/bash /tmp/whm/backup.sh & '"
+                  }
+               }
+            }
+        }
+          stage ('Image Automation') {
+            steps {
+                echo "Backup image setup"
+                script {
+                sshagent(["${params.REMOTE_USER"]) {
+                    sh "ssh ${params.REMOTE_USER}@${params.REMOTE_IP} 'sudo /usr/bin/bash /tmp/whm/snapshot.sh & '"
+                  }
+               }
+            }
+        }
+    }
+}
